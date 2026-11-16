@@ -1,0 +1,195 @@
+openapi: 3.0.3
+info:
+  title: Distributed Key-Value Store API (Milestone 2)
+  description: REST API для реєстрації таблиць зі складеним ключем та розподілених CRUD-операцій з шардингом.
+  version: 2.0.0
+
+servers:
+  - url: http://localhost:8000
+    description: Вузол-координатор
+
+paths:
+  /shards/register:
+    post:
+      summary: Реєстрація вузла-шарда в координаторі
+      description: Викликається шардом при старті для додавання його у кільце Consistent Hashing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShardRegistration'
+      responses:
+        '200':
+          description: Шард успішно зареєстровано
+
+  /tables:
+    post:
+      summary: Реєстрація визначення таблиці
+      description: Створює схему таблиці із зазначенням partition_key та опціонального sort_key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableDefinition'
+      responses:
+        '201':
+          description: Таблицю зареєстровано
+        '409':
+          description: Таблиця вже існує
+
+  /tables/{table_name}/items:
+    post:
+      summary: CREATE — зберегти пару ключ-значення
+      parameters:
+        - $ref: '#/components/parameters/TableName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemCreate'
+      responses:
+        '201':
+          description: Запис створено на відповідному шарді
+        '404':
+          description: Таблицю не знайдено
+
+  /tables/{table_name}/items/{partition_key}:
+    head:
+      summary: EXISTS — перевірити наявність запису за ключем
+      parameters:
+        - $ref: '#/components/parameters/TableName'
+        - $ref: '#/components/parameters/PartitionKey'
+        - $ref: '#/components/parameters/SortKeyQuery'
+      responses:
+        '200':
+          description: Запис існує
+        '404':
+          description: Запис не знайдено
+
+    get:
+      summary: READ — отримати значення за ключем
+      parameters:
+        - $ref: '#/components/parameters/TableName'
+        - $ref: '#/components/parameters/PartitionKey'
+        - $ref: '#/components/parameters/SortKeyQuery'
+      responses:
+        '200':
+          description: Значення успішно отримано з шарда
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+        '404':
+          description: Запис не знайдено
+
+    delete:
+      summary: DELETE — видалити запис за ключем
+      parameters:
+        - $ref: '#/components/parameters/TableName'
+        - $ref: '#/components/parameters/PartitionKey'
+        - $ref: '#/components/parameters/SortKeyQuery'
+      responses:
+        '204':
+          description: Запис видалено з шарда
+        '404':
+          description: Запис не знайдено
+
+components:
+  parameters:
+    TableName:
+      name: table_name
+      in: path
+      required: true
+      schema:
+        type: string
+        example: orders
+
+    PartitionKey:
+      name: partition_key
+      in: path
+      required: true
+      description: Ключ партиціонування (визначає вибір шарда)
+      schema:
+        type: string
+        example: user_101
+
+    SortKeyQuery:
+      name: sort_key
+      in: query
+      required: false
+      description: Ключ сортування (для складеного первинного ключа)
+      schema:
+        type: string
+        example: "2026-11-16T20:00:00"
+
+  schemas:
+    ShardRegistration:
+      type: object
+      required: [shard_id, url]
+      properties:
+        shard_id:
+          type: string
+          example: shard-1
+        url:
+          type: string
+          example: http://10.0.2.15:8001
+
+    TableDefinition:
+      type: object
+      required: [table_name, partition_key]
+      properties:
+        table_name:
+          type: string
+          example: orders
+        partition_key:
+          type: string
+          example: user_id
+        sort_key:
+          type: string
+          nullable: true
+          example: order_timestamp
+        schema:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            total: float
+            status: string
+
+    ItemCreate:
+      type: object
+      required: [partition_key, value]
+      properties:
+        partition_key:
+          type: string
+          example: user_101
+        sort_key:
+          type: string
+          nullable: true
+          example: "2026-11-16T20:00:00"
+        value:
+          type: object
+          additionalProperties: true
+          example:
+            total: 450.50
+            status: "paid"
+
+    ItemResponse:
+      type: object
+      properties:
+        shard_id:
+          type: string
+          example: shard-2
+        partition_key:
+          type: string
+          example: user_101
+        sort_key:
+          type: string
+          nullable: true
+          example: "2026-11-16T20:00:00"
+        value:
+          type: object
+          additionalProperties: true

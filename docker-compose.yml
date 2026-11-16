@@ -1,0 +1,36 @@
+services:
+  coordinator:
+    build: ./coordinator
+    container_name: kv-coordinator
+    ports:
+      - "8000:8000"
+    networks:
+      - kv-net
+
+  shard-1:
+    build: ./shard
+    container_name: kv-shard-1
+    environment:
+      - SHARD_ID=shard-1
+      - SHARD_URL=http://shard-1:8001
+      - COORDINATOR_URL=http://coordinator:8000
+    depends_on:
+      - coordinator
+    networks:
+      - kv-net
+
+  shard-2:
+    build: ./shard
+    container_name: kv-shard-2
+    environment:
+      - SHARD_ID=shard-2
+      - SHARD_URL=http://shard-2:8001
+      - COORDINATOR_URL=http://coordinator:8000
+    depends_on:
+      - coordinator
+    networks:
+      - kv-net
+
+networks:
+  kv-net:
+    driver: bridge
