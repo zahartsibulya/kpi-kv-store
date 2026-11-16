@@ -1,0 +1,30 @@
+name: Deploy KV Store Cluster to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Якщо папки ще немає — клонуємо репозиторій, якщо є — оновлюємо
+            if [ ! -d "kpi-kv-store" ]; then
+              git clone https://github.com/${{ github.repository }}.git
+            fi
+            cd kpi-kv-store
+            git pull origin main
+            
+            # Збираємо та перезапускаємо контейнери (Координатор + 2 Шарди)
+            sudo docker compose up -d --build
+            
+            # Виводимо статус запущених контейнерів для перевірки
+            sudo docker compose ps
